@@ -29,7 +29,7 @@ if(/^(?:morgen|übermorgen|heute)\s+(?:braucht|muss|soll|in\s+|auf\s+)/i.test(t)
 return false;}
 export function splitRequests(raw){
 let s=clean(raw).replace(/\s+(?:außerdem|zusätzlich|danach|des weiteren)\s*[:,]?\s+/gi,". ");
-const parts=s.split(/[.!?;\n]+/).map(clean).filter(Boolean);
+const protectedDates=s.replace(/\b\d{1,2}\.\d{1,2}(?:\.\d{2,4})?\.?/g,m=>m.replace(/\./g,"§"));const parts=protectedDates.split(/[.!?;\n]+/).map(x=>clean(x.replace(/§/g,"."))).filter(Boolean);
 const result=[];
 for(let p of parts){let start=0;const and=/\s+und\s+/gi;let m;while((m=and.exec(p))!==null){if(newRequestStart(p.slice(m.index+m[0].length))){let piece=clean(p.slice(start,m.index));if(piece)result.push(piece);start=m.index+m[0].length;}}
 let tail=clean(p.slice(start));if(tail)result.push(tail)}
@@ -50,12 +50,12 @@ const candidates=[];
 const after=s.match(new RegExp("\\b(?:braucht|benötigt)\\s+("+CITY+"(?:\\s+"+CITY+")?)\\b","iu"));
 if(after){
 const a=after[1].split(/\s+/).filter(Boolean);
-if(!/^(?:Ein|Eine|Einen|Noch|Zwei|Drei|Vier|Fünf|Einen|Einer|LKW|Bagger|Kran|Helfer)$/i.test(a[0])){
+if(!/^(?:Ein|Eine|Einen|Noch|Zwei|Drei|Vier|Fünf|Einer|LKW|Bagger|Kran|Helfer|Am|Um|Ab|Heute|Morgen|Übermorgen|In|Nach|Auf|Für|Bei)$/i.test(a[0])){
   candidates.push(a[0]);
 }}
 const before=s.match(new RegExp("\\b("+CITY+"(?:\\s+"+CITY+")?)\\s+(?:braucht|benötigt|möchte)\\b","iu"));
 if(before){
-let name=before[1].replace(/^(?:in|auf|nach|für|bei)\s+/i,"");
+let name=before[1].replace(/^(?:in|auf|nach|für|bei|heute|morgen|übermorgen)\s+/i,"");
 if(name!==place.value&&!/^(?:in|auf|nach|für|bei)\b/i.test(before[1]))candidates.push(name);
 }
 const forPerson=s.match(new RegExp("\\b(?:für|bei)\\s+("+CITY+"(?:\\s+"+CITY+")?)\\s+(?=(?:noch\\s+|bitte\\s+|einen?\\s+|eine\\s+|zwei\\s+|drei\\s+|vier\\s+|\\d+\\s+|(?:"+VEHICLES+")\\b|$))","iu"));
