@@ -51,8 +51,8 @@ function plausiblePlace(name){return name&&/^\p{Lu}/u.test(name)&&!/^(?:Um|Ab|Ge
 function parsePlace(s){
 let m=s.match(new RegExp("\\b(?:auf\\s+der\\s+Baustelle|auf\\s+Baustelle|Baustelle)\\s+("+CITY+")","iu"));
 if(m&&plausiblePlace(m[1]))return {value:m[1],confidence:"hoch"};
-m=s.match(new RegExp("\\b(?:in|nach)\\s+("+CITY+")","iu"));
-if(m&&plausiblePlace(m[1]))return {value:m[1],confidence:"hoch"};
+const locations=[...s.matchAll(new RegExp("\\b(?:in|nach)\\s+("+CITY+")","giu"))];
+for(let item of locations){if(plausiblePlace(item[1]))return {value:item[1],confidence:"hoch"}}
 m=s.match(new RegExp("^("+CITY+")\\s+("+CITY+")\\s+("+CITY+")\\s+(?:(?:\\d+|ein\\w*|zwei|drei|vier)\\s+)?(?:"+VEHICLES+")\\b","iu"));
 if(m&&plausiblePlace(m[1]))return {value:m[1],confidence:"mittel",leadingPerson:m[2]+" "+m[3]};
 return {value:"",confidence:"offen"};
