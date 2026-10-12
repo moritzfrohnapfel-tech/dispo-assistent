@@ -25,14 +25,14 @@ const spoken="(?:\\d{1,2}|ein(?:s)?|zwei|drei|vier|fünf|sechs|sieben|acht|neun|
 let m=s.match(new RegExp("\\b(?:um|gegen|ab|bis|spätestens)\\s+halb\\s+("+spoken+")\\b","i"));if(m){let h=hour(m[1]);return timeStr(h===0?23:h-1,30)}
 m=s.match(new RegExp("\\b(?:um|gegen|ab|bis|spätestens)\\s+(?:viertel\\s+vor|dreiviertel)\\s+("+spoken+")\\b","i"));if(m){let h=hour(m[1]);return timeStr(h===0?23:h-1,45)}
 m=s.match(new RegExp("\\b(?:um|gegen|ab|bis|spätestens)\\s+viertel\\s+nach\\s+("+spoken+")\\b","i"));if(m)return timeStr(hour(m[1]),15);
-m=s.match(/\b(?:um|ab|gegen|bis|spätestens)\s+(\d{1,2})(?:[:.](\d{2}))?\s*(?:uhr)?\b/i)||s.match(/\b(\d{1,2})[:.](\d{2})\s*(?:uhr)?\b/i)||s.match(/\b(\d{1,2})\s*uhr\b/i);
+m=s.match(/\b(?:um|ab|gegen|bis|spätestens)\s+(\d{1,2})(?:[:.](\d{2}))?\s*(?:uhr)?\b/i)||s.match(/\b(\d{1,2}):(\d{2})\s*(?:uhr)?\b/i)||s.match(/\b(\d{1,2})\s*uhr\b/i);
 if(m)return timeStr(Number(m[1]),Number(m[2]||0));
 m=s.match(new RegExp("\\b(?:um|ab|gegen|bis|spätestens)\\s+("+spoken+")\\s*(?:uhr)?\\b","i"));
 if(m)return timeStr(hour(m[1]),0);
 return "";}
 function number(value){if(!value)return 1;return QTY[value.toLowerCase()]||Number(value)||1}
 function standardVehicle(v){let low=v.toLowerCase();if(/^lkw|^lastwagen|^laster/.test(low))return "LKW";if(/^kr/.test(low))return "Kran";if(/^wal/.test(low))return "Walze";if(/^hel|^mitarbeiter|^leute|^mann/.test(low))return "Helfer/Personal";return v[0].toUpperCase()+v.slice(1).toLowerCase()}
-function parseResources(s){let a=[];for(const m of s.matchAll(RESOURCE_REGEX)){let label=standardVehicle(m[2]);let count=number(m[1]);let existing=a.find(x=>x.label===label);if(existing)existing.amount+=count;else a.push({label,amount:count})}return a.map(x=>x.amount+" × "+x.label).join(", ")}
+function parseResources(s){let cleaned=s.replace(/\b(?:um|gegen|ab|bis|spätestens)\s+(?:halb|viertel\s+(?:vor|nach)|dreiviertel)\s+(?:\d{1,2}|ein(?:s)?|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf)\b/gi,"");let a=[];for(const m of cleaned.matchAll(RESOURCE_REGEX)){let label=standardVehicle(m[2]);let count=number(m[1]);let existing=a.find(x=>x.label===label);if(existing)existing.amount+=count;else a.push({label,amount:count})}return a.map(x=>x.amount+" × "+x.label).join(", ")}
 function newRequestStart(s){let t=s.trim();if(/^(?:ich|wir)\s+(?:muss|müssen|soll|sollen|habe|haben)\b/i.test(t))return true;
 if(/^(?:in|nach|für|bei)\s+[\p{Lu}][\p{L}-]+(?:\s+[\p{Lu}][\p{L}-]+)?\s+(?:braucht|benötigt|muss|soll)\b/u.test(t))return true;
 if(/^auf\s+(?:der\s+)?baustelle\s+[\p{Lu}][\p{L}-]+(?:\s+[\p{Lu}][\p{L}-]+)?\s+(?:braucht|benötigt|muss|soll)\b/iu.test(t))return true;
@@ -47,7 +47,7 @@ for(let p of parts){let start=0;const and=/\s+und\s+/gi;let m;while((m=and.exec(
 let tail=clean(p.slice(start));if(tail)result.push(tail)}
 return result;
 }
-function plausiblePlace(name){return name&&!/^(?:Um|Ab|Gegen|Auf|Der|Die|Das|Ein|Einen|Eine|Noch|Heute|Morgen|Uhr)$/i.test(name)}
+function plausiblePlace(name){return name&&/^\p{Lu}/u.test(name)&&!/^(?:Um|Ab|Gegen|Auf|Der|Die|Das|Ein|Einen|Eine|Noch|Heute|Morgen|Uhr)$/i.test(name)}
 function parsePlace(s){
 let m=s.match(new RegExp("\\b(?:auf\\s+der\\s+Baustelle|auf\\s+Baustelle|Baustelle)\\s+("+CITY+")","iu"));
 if(m&&plausiblePlace(m[1]))return {value:m[1],confidence:"hoch"};
