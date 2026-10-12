@@ -46,11 +46,22 @@ if(m&&plausiblePlace(m[1]))return {value:m[1],confidence:"mittel",leadingPerson:
 return {value:"",confidence:"offen"};
 }
 function parsePerson(s,place){
-const possible=[];
-let m=s.match(new RegExp("\\b("+CITY+"(?:\\s+"+CITY+")?)\\s+(?:braucht|benötigt|möchte)\\b","iu"));if(m)possible.push(m[1]);
-m=s.match(new RegExp("\\b(?:braucht|benötigt|für|bei)\\s+("+CITY+"(?:\\s+"+CITY+")?)\\s+(?=(?:noch\\s+|bitte\\s+|einen?\\s+|eine\\s+|zwei\\s+|drei\\s+|vier\\s+|\\d+\\s+|(?:"+VEHICLES+")\\b|$))","iu"));if(m)possible.push(m[1]);
-if(place.leadingPerson)possible.push(place.leadingPerson);
-for(let candidate of possible){let val=candidate.trim();if(notName.test(val)||val===place.value)continue;return val}
+const candidates=[];
+const after=s.match(new RegExp("\\b(?:braucht|benötigt)\\s+("+CITY+"(?:\\s+"+CITY+")?)\\b","iu"));
+if(after){
+const a=after[1].split(/\s+/).filter(Boolean);
+if(!/^(?:Ein|Eine|Einen|Noch|Zwei|Drei|Vier|Fünf|Einen|Einer|LKW|Bagger|Kran|Helfer)$/i.test(a[0])){
+  candidates.push(a[0]);
+}}
+const before=s.match(new RegExp("\\b("+CITY+"(?:\\s+"+CITY+")?)\\s+(?:braucht|benötigt|möchte)\\b","iu"));
+if(before){
+let name=before[1].replace(/^(?:in|auf|nach|für|bei)\s+/i,"");
+if(name!==place.value&&!/^(?:in|auf|nach|für|bei)\b/i.test(before[1]))candidates.push(name);
+}
+const forPerson=s.match(new RegExp("\\b(?:für|bei)\\s+("+CITY+"(?:\\s+"+CITY+")?)\\s+(?=(?:noch\\s+|bitte\\s+|einen?\\s+|eine\\s+|zwei\\s+|drei\\s+|vier\\s+|\\d+\\s+|(?:"+VEHICLES+")\\b|$))","iu"));
+if(forPerson)candidates.push(forPerson[1]);
+if(place.leadingPerson)candidates.push(place.leadingPerson);
+for(let candidate of candidates){let val=candidate.trim();if(notName.test(val)||val===place.value||/^(?:in|auf|nach|für|bei)\b/i.test(val))continue;return val}
 return "";}
 function parseMaterial(s){let m=s.match(/\b((?:0\s*[-\/]\s*\d{1,2}|0\s+\d{1,2})\s*(?:basalt|schotter|frostschutz|kies|splitt)|(?:basalt|schotter|frostschutz|kies|splitt|asphalt|sand|mutterboden|boden))\b/i);return m?m[1].replace(/\s*[-\/]\s*/g,"/").replace(/\b0\s+(\d{1,2})\b/,"0/$1"):""}
 function parsePickup(s){let m=s.match(new RegExp("\\b(?:von|aus|abhol(?:en|ung)?\\s+(?:in|bei)?)\\s+("+CITY+")","iu"));return m&&plausiblePlace(m[1])?m[1]:""}
