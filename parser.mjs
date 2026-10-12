@@ -95,7 +95,7 @@ const warnings=[];
 if(!place.value)warnings.push("Baustelle/Ort nicht sicher erkannt");
 else if(place.confidence==="mittel")warnings.push("Ortszuordnung bitte prüfen");
 if(!person&&kind==="Disposition")warnings.push("Zuständige Person fehlt");
-if(!localDate&&!currentDate)warnings.push("Datum fehlt");
+if(!localDate&&!currentDate)warnings.push("Datum fehlt");else if(!localDate&&currentDate)warnings.push("Datum vom vorherigen Vorgang übernommen – bitte prüfen");
 if(kind==="Ungeklärt")warnings.push("Anforderung nicht eindeutig");
 if(!resource&&kind==="Disposition")warnings.push("Fahrzeug/Personal nicht erkannt");
 return {id:++id,kind,date:localDate||currentDate||"",site:place.value||"",person,resources:resource,time,material,pickup,destination:drop,action:action(text),detail:text,warnings,confirmed:false};
