@@ -1,5 +1,5 @@
 // Dispo Assistent – lokale, nachvollziehbare Heuristik. Keine KI / keine Datenübertragung.
-export const PARSER_VERSION = "0.6.0";
+export const PARSER_VERSION = "0.7.0";
 const PLACEHOLDER = "Nicht erkannt";
 const QTY = {ein:1,eine:1,einen:1,einem:1,einer:1,eins:1,zwei:2,drei:3,vier:4,fünf:5,sechs:6,sieben:7,acht:8,neun:9,zehn:10};
 const VEHICLES = "(?:LKWs?|LKW|Lastwagen|Laster|Vierachser|Dreiachser|Kipper|Kräne|Kran|Bagger|Radbagger|Radlader|Walzen?|Tieflader|Anhänger|Helfer|Mitarbeiter|Leute|Mann)";
@@ -17,7 +17,19 @@ if(/\bmorgen\b/i.test(s))return shiftDay(now,1);
 if(/\bheute\b/i.test(s))return shiftDay(now,0);
 const week=s.match(/\b(?:(nächsten?|kommenden?)\s+)?(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b/i);if(week)return weekdayDate(week[2],now,Boolean(week[1]));
 return "";}
-function parseTime(s){let m=s.match(/\b(?:um|ab|gegen|bis|spätestens)\s+(\d{1,2})(?:[:.](\d{2}))?\s*(?:uhr)?\b/i)||s.match(/\b(\d{1,2})[:.](\d{2})\s*(?:uhr)?\b/i)||s.match(/\b(\d{1,2})\s*uhr\b/i);if(!m)return "";let h=Number(m[1]),min=Number(m[2]||0);return h<=23&&min<60?String(h).padStart(2,"0")+":"+String(min).padStart(2,"0"):"";}
+const HOUR_WORDS={null:0,ein:1,eins:1,eine:1,zwei:2,drei:3,vier:4,fünf:5,sechs:6,sieben:7,acht:8,neun:9,zehn:10,elf:11,zwölf:12,dreizehn:13,vierzehn:14,fünfzehn:15,sechzehn:16,siebzehn:17,achtzehn:18,neunzehn:19,zwanzig:20,einundzwanzig:21,zweiundzwanzig:22,dreiundzwanzig:23};
+function hour(value){return /^\d+$/.test(value)?Number(value):HOUR_WORDS[value?.toLowerCase()]}
+function timeStr(h,m){return Number.isInteger(h)&&h>=0&&h<=23&&m>=0&&m<=59?String(h).padStart(2,"0")+":"+String(m).padStart(2,"0"):""}
+function parseTime(s){
+const spoken="(?:\\d{1,2}|ein(?:s)?|zwei|drei|vier|fünf|sechs|sieben|acht|neun|zehn|elf|zwölf|dreizehn|vierzehn|fünfzehn|sechzehn|siebzehn|achtzehn|neunzehn|zwanzig|einundzwanzig|zweiundzwanzig|dreiundzwanzig)";
+let m=s.match(new RegExp("\\b(?:um|gegen|ab|bis|spätestens)\\s+halb\\s+("+spoken+")\\b","i"));if(m){let h=hour(m[1]);return timeStr(h===0?23:h-1,30)}
+m=s.match(new RegExp("\\b(?:um|gegen|ab|bis|spätestens)\\s+(?:viertel\\s+vor|dreiviertel)\\s+("+spoken+")\\b","i"));if(m){let h=hour(m[1]);return timeStr(h===0?23:h-1,45)}
+m=s.match(new RegExp("\\b(?:um|gegen|ab|bis|spätestens)\\s+viertel\\s+nach\\s+("+spoken+")\\b","i"));if(m)return timeStr(hour(m[1]),15);
+m=s.match(/\b(?:um|ab|gegen|bis|spätestens)\s+(\d{1,2})(?:[:.](\d{2}))?\s*(?:uhr)?\b/i)||s.match(/\b(\d{1,2})[:.](\d{2})\s*(?:uhr)?\b/i)||s.match(/\b(\d{1,2})\s*uhr\b/i);
+if(m)return timeStr(Number(m[1]),Number(m[2]||0));
+m=s.match(new RegExp("\\b(?:um|ab|gegen|bis|spätestens)\\s+("+spoken+")\\s*(?:uhr)?\\b","i"));
+if(m)return timeStr(hour(m[1]),0);
+return "";}
 function number(value){if(!value)return 1;return QTY[value.toLowerCase()]||Number(value)||1}
 function standardVehicle(v){let low=v.toLowerCase();if(/^lkw|^lastwagen|^laster/.test(low))return "LKW";if(/^kr/.test(low))return "Kran";if(/^wal/.test(low))return "Walze";if(/^hel|^mitarbeiter|^leute|^mann/.test(low))return "Helfer/Personal";return v[0].toUpperCase()+v.slice(1).toLowerCase()}
 function parseResources(s){let a=[];for(const m of s.matchAll(RESOURCE_REGEX)){let label=standardVehicle(m[2]);let count=number(m[1]);let existing=a.find(x=>x.label===label);if(existing)existing.amount+=count;else a.push({label,amount:count})}return a.map(x=>x.amount+" × "+x.label).join(", ")}
