@@ -1,0 +1,13 @@
+name = "dispo-assistent-api"
+main = "backend/worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[ai]
+binding = "AI"
+
+[vars]
+ALLOWED_ORIGIN = "https://moritzfrohnapfel-tech.github.io"
+
+# DISPO_ACCESS_TOKEN must be set separately as a secret.
+# Do not commit your private token or API keys.
