@@ -135,12 +135,12 @@ export default {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (url.pathname === "/health" && request.method === "GET") {
-      return json({ service: "dispo-ai", ready: Boolean(env.AI?.run && env.DISPO_ACCESS_TOKEN), engine: "Cloudflare Workers AI", version: VERSION }, 200, cors);
+      return json({ service: "dispo-ai", ready: Boolean(env.AI?.run && env.DISPO_ACCESS_TOKEN?.length >= 32), engine: "Cloudflare Workers AI", version: VERSION }, 200, cors);
     }
     if (url.pathname !== "/api/analyze" || request.method !== "POST") {
       return json({ error: "Nicht gefunden" }, 404, cors);
     }
-    if (!env.DISPO_ACCESS_TOKEN || !env.AI?.run) {
+    if (!env.DISPO_ACCESS_TOKEN || env.DISPO_ACCESS_TOKEN.length < 32 || !env.AI?.run) {
       return json({ error: "KI-Server noch nicht konfiguriert" }, 503, cors);
     }
     // Strong private access token, stored only in the Worker as a secret.
