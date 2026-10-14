@@ -1,17 +1,18 @@
 /**
- * Dispo-Assistent API Gateway (Cloudflare Worker)
- * Secrets (Worker settings, NOT this public repository):
- *   OPENAI_API_KEY   - OpenAI API secret
- *   DISPO_ACCESS_TOKEN - random 32+ character shared access key for the private owner
- * Optional variables:
- *   ALLOWED_ORIGIN - https://moritzfrohnapfel-tech.github.io
- *   OPENAI_MODEL - gpt-4.1-mini
+ * Dispo-Assistent – Cloudflare Workers AI (Free tier)
  *
- * Note: This single-user access key is not a substitute for enterprise identity or
- * organization-wide rate limiting. Use Cloudflare security/rate limiting and
- * organization approval before processing real employee/customer data.
+ * To deploy via Cloudflare dashboard:
+ * 1. Create Worker and paste this file.
+ * 2. Add Workers AI binding with variable name AI.
+ * 3. Add Secret DISPO_ACCESS_TOKEN with a random private value (32+ chars).
+ * 4. Deploy. No OpenAI API key, no paid OpenAI account needed.
+ *
+ * This is a private proof of concept. Limit access and obtain employer
+ * approval before processing actual work/employee/customer data.
  */
 const DEFAULT_ORIGIN = "https://moritzfrohnapfel-tech.github.io";
+const AI_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+const VERSION = "0.9.0";
 const MAX_TEXT_LENGTH = 12000;
 const MAX_BODY_LENGTH = 24000;
 const FIELDS = ["kind", "date", "site", "person", "resources", "time", "material", "pickup", "destination", "action", "detail", "warnings"];
@@ -91,12 +92,19 @@ async function secureEqual(a, b) {
   for (let i = 0; i < xa.length; i++) difference |= xa[i] ^ ya[i];
   return difference === 0;
 }
-function outputText(response) {
-  if (typeof response?.output_text === "string") return response.output_text;
-  return (response?.output || [])
-    .flatMap(item => item?.content || [])
-    .filter(part => part?.type === "output_text" && typeof part?.text === "string")
-    .map(part => part.text).join("");
+function readModelResult(result) {
+  // Workers AI's JSON mode generally returns {response: <object>}.
+  // Defensive decoding accommodates models that return a JSON string.
+  let value = result?.response ?? result;
+  if (typeof value === "string") {
+    const stripped = value.trim().replace(/^\x60\x60\x60(?:json)?\s*/i, "").replace(/\s*\x60\x60\x60$/, "");
+    try { value = JSON.parse(stripped); }
+    catch { throw new Error("Modell lieferte kein gültiges JSON"); }
+  }
+  if (!value || typeof value !== "object" || !Array.isArray(value.entries)) {
+    throw new Error("Modell lieferte keine gültigen Vorgänge");
+  }
+  return value.entries;
 }
 function normalizeEntries(entries) {
   if (!Array.isArray(entries) || entries.length > 20) throw new Error("invalid entries");
@@ -127,12 +135,12 @@ export default {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (url.pathname === "/health" && request.method === "GET") {
-      return json({ service: "dispo-ai", ready: Boolean(env.OPENAI_API_KEY && env.DISPO_ACCESS_TOKEN), version: "0.8.0" }, 200, cors);
+      return json({ service: "dispo-ai", ready: Boolean(env.AI?.run && env.DISPO_ACCESS_TOKEN), engine: "Cloudflare Workers AI", version: VERSION }, 200, cors);
     }
     if (url.pathname !== "/api/analyze" || request.method !== "POST") {
       return json({ error: "Nicht gefunden" }, 404, cors);
     }
-    if (!env.DISPO_ACCESS_TOKEN || !env.OPENAI_API_KEY) {
+    if (!env.DISPO_ACCESS_TOKEN || !env.AI?.run) {
       return json({ error: "KI-Server noch nicht konfiguriert" }, 503, cors);
     }
     // Strong private access token, stored only in the Worker as a secret.
@@ -157,43 +165,30 @@ export default {
     const text = typeof body?.text === "string" ? body.text.trim() : "";
     const date = /^\d{4}-\d{2}-\d{2}$/.test(body?.today) ? body.today : "unbekannt";
     if (!text || text.length > MAX_TEXT_LENGTH) return json({ error: "Diktat fehlt oder ist zu lang" }, 422, cors);
-    const model = env.OPENAI_MODEL || "gpt-4.1-mini";
-    const payload = {
-      model,
-      store: false,
-      input: [
-        { role: "system", content: SYSTEM_INSTRUCTIONS },
-        { role: "user", content: "Lokales Datum (Deutschland): " + date + "\n\nDiktiertes Protokoll:\n" + text }
-      ],
-      text: { format: { type: "json_schema", name: "dispo_analysis", strict: true, schema: SCHEMA } },
-      max_output_tokens: 5000
-    };
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 45000);
+    // Using Cloudflare's native AI binding; the free quota is enforced
+    // by Cloudflare. No API secret is sent to the browser or upstream.
+    const messages = [
+      { role: "system", content: SYSTEM_INSTRUCTIONS },
+      { role: "user", content: "Lokales Datum (Deutschland): " + date + "\n\nDiktiertes Protokoll:\n" + text }
+    ];
     try {
-      const ai = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: {
-          "Authorization": "Bearer " + env.OPENAI_API_KEY,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
+      const modelResponse = await env.AI.run(AI_MODEL, {
+        messages,
+        response_format: { type: "json_schema", json_schema: SCHEMA },
+        temperature: 0.1,
+        max_tokens: 2500
       });
-      if (!ai.ok) {
-        // Do not forward provider response: it might contain debugging details.
-        return json({ error: "KI-Dienst derzeit nicht verfügbar", upstream_status: ai.status }, 502, cors);
-      }
-      const response = await ai.json();
-      const textOutput = outputText(response);
-      if (!textOutput) return json({ error: "KI hat keine vollständige Auswertung geliefert" }, 502, cors);
-      const parsed = JSON.parse(textOutput);
-      const entries = normalizeEntries(parsed.entries);
-      return json({ entries, source: "ai", version: "0.8.0" }, 200, cors);
+      const entries = normalizeEntries(readModelResult(modelResponse));
+      if (!entries.length) return json({ error: "Keine Vorgänge erkannt. Bitte Diktat genauer formulieren." }, 422, cors);
+      return json({ entries, source: "ai", engine: "cloudflare-workers-ai", version: VERSION }, 200, cors);
     } catch (error) {
-      return json({ error: error?.name === "AbortError" ? "KI-Zeitüberschreitung" : "KI-Auswertung fehlgeschlagen" }, 502, cors);
-    } finally {
-      clearTimeout(timeout);
+      // The worker never falls back silently. The app can retry locally.
+      const problem = String(error?.message || "").toLowerCase();
+      const quota = /limit|quota|neurons|capacity|3040|429|exhaust|billing/i.test(problem);
+      const message = quota
+        ? "Kostenloses KI-Kontingent aufgebraucht oder Modell vorübergehend ausgelastet. Bitte später oder lokal auswerten."
+        : "KI-Auswertung nicht möglich. Bitte lokale Auswertung verwenden oder erneut versuchen.";
+      return json({ error: message }, 503, cors);
     }
   }
 };
